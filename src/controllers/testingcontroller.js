@@ -1,4 +1,7 @@
 const {hashedPassword,comparePassword} = require('./authcontroller');
+const User = require('../db/schema/userschema');
+const Post = require('../db/schema/postschema');
+const jwt = require('jsonwebtoken');
 
 const testing = (req,res,next)=>{
     try{
@@ -11,10 +14,25 @@ const testing = (req,res,next)=>{
 }
 
 const authentication = async (req,res,next)=>{
-    const password = req.body;
+    const {username,password,email} = req.body;
 
     try{
-       const hashed = await hashedpassword(password);
+       const hashed = await hashedPassword(password);
+
+       const data = {
+        username,
+        password:hashed,
+        email
+       }
+
+        const senddata = await User.create(data);
+
+        res.status(201).json({
+            msg:"User Created Successfully",
+            username:data.username,
+            email:data.email,
+        })
+
     }catch(err){
         next(err);
     }
@@ -22,12 +40,35 @@ const authentication = async (req,res,next)=>{
 
 const compareauth = async(req,res,next)=>{
     const {username,password} = req.body;
-    //won't run until username used to fetch user through db
 
     try{
-        const check = await comparePassword(password,hashedpass);
+
+        const data = await User.findOne({username}).select('+password');
+
+        if(!data){ 
+            const err = new Error('User Not Found');
+            return next(err);
+        }
+
+        const check = await comparePassword(password,data.password);
+
+        if(!check){
+            const err = new Error('Invalid Credentials');
+            return next(err);
+        }
+
+        const token = jwt.sign({
+            username:data.username,
+            email:data.email,
+        },process.env.JWT_SECRET);
+
+        res.status(200).json({
+            msg:"User login successful",
+            token,
+        });
+
     }catch(err){
         next(err);
     }
 }
-module.exports = {testing};
+module.exports = {testing,authentication,compareauth};
